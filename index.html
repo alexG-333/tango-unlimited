@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Tango Unlimited</title>
+<style>
+  :root {
+    --page: #f4f2ee;
+    --card: #f8fafd;
+    --line: #ebe4da;
+    --given: #eeebe7;
+    --text: rgba(0, 0, 0, .9);
+    --muted: rgba(0, 0, 0, .6);
+    --marker: #8c6d46;
+    --sun: #ffb531;
+    --sun-edge: #d97f2b;
+    --moon: #4c8ce6;
+    --moon-edge: #2c5cb5;
+    --error: #d93025;
+    --blue: #0a66c2;
+    --board: min(416px, calc(100vw - 48px));
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--page);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+    gap: 8px;
+    height: 56px;
+    padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
+    background: #fff;
+    border-bottom: 1px solid rgba(0, 0, 0, .08);
+  }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; white-space: nowrap; }
+  .timer {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums;
+  }
+  .timer svg { width: 15px; height: 15px; }
+  .header-right { display: flex; justify-content: flex-end; }
+  .btn {
+    font: inherit; font-size: 14px; font-weight: 600; color: var(--text);
+    height: 32px; padding: 0 16px;
+    background: #fff; border: 1px solid rgba(0, 0, 0, .75); border-radius: 16px;
+    cursor: pointer; touch-action: manipulation; white-space: nowrap;
+  }
+  .btn:hover:not(:disabled) { background: rgba(0, 0, 0, .06); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .75); }
+  .btn:disabled { background: rgba(0, 0, 0, .08); border-color: transparent; color: rgba(0, 0, 0, .3); cursor: default; }
+  .btn.icon { width: 32px; padding: 0 0 2px; font-size: 20px; line-height: 1; }
+  .picker { display: flex; align-items: center; gap: 6px; }
+  .number { display: flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .number input {
+    width: 5ch; box-sizing: content-box; padding: 0 6px; height: 30px;
+    font: inherit; font-size: 16px; font-variant-numeric: tabular-nums; text-align: center; color: var(--text);
+    background: #fff; border: 1px solid rgba(0, 0, 0, .3); border-radius: 6px;
+  }
+  .btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .btn.primary:hover { background: #004182; border-color: #004182; box-shadow: none; }
+  .btn:focus-visible, .cell:focus-visible, .number input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+  main {
+    width: calc(var(--board) + 24px);
+    margin: 20px auto 40px;
+    padding: 12px;
+    background: var(--card);
+    border-radius: 8px;
+  }
+  .board-wrap { position: relative; }
+  .board {
+    display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: repeat(6, minmax(0, 1fr));
+    width: var(--board); height: var(--board);
+    border: 1px solid var(--line); border-radius: 4px;
+    background: var(--line);
+  }
+  .cell {
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0; margin: 0;
+    background: #fff; border: 1px solid var(--line);
+    font: inherit; cursor: pointer; touch-action: manipulation;
+    -webkit-user-select: none; user-select: none;
+  }
+  .cell.given { background: var(--given); cursor: default; }
+  .cell.error {
+    background: repeating-linear-gradient(135deg, #fff 0 6px, var(--error) 6px 10px);
+  }
+  .cell.given.error {
+    background: repeating-linear-gradient(135deg, var(--given) 0 6px, var(--error) 6px 10px);
+  }
+  .cell { min-width: 0; min-height: 0; }
+  .cell svg.piece { width: 46%; height: auto; aspect-ratio: 1; pointer-events: none; }
+  .solved .cell { cursor: default; }
+  .marker {
+    position: absolute; z-index: 2;
+    width: 16px; height: 16px;
+    display: flex; align-items: center; justify-content: center;
+    background: #fff; border-radius: 50%;
+    pointer-events: none;
+  }
+  .marker svg { width: 10px; height: 10px; }
+  .marker.right { right: -1px; top: 50%; transform: translate(50%, -50%); }
+  .marker.bottom { bottom: -1px; left: 50%; transform: translate(-50%, 50%); }
+
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .message {
+    margin-top: 12px; padding: 12px 16px;
+    border: 1px solid var(--error); border-radius: 4px;
+    background: #fff; font-size: 14px; line-height: 1.4;
+  }
+  .win {
+    margin-top: 12px; padding: 16px;
+    border: 1px solid #b7dfc1; border-radius: 8px;
+    background: #eef8f0; text-align: center;
+  }
+  .win h2 { margin: 0 0 4px; font-size: 18px; }
+  .win p { margin: 0 0 12px; font-size: 14px; color: var(--muted); }
+  .win .btn { height: 40px; border-radius: 20px; padding: 0 24px; font-size: 16px; }
+  [hidden] { display: none !important; }
+
+  details.howto {
+    margin-top: 12px; padding: 0 16px;
+    border: 1px solid rgba(0, 0, 0, .08); border-radius: 8px;
+    font-size: 14px; line-height: 1.45;
+  }
+  details.howto summary {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 0; font-weight: 600; cursor: pointer; list-style: none;
+  }
+  details.howto summary::-webkit-details-marker { display: none; }
+  details.howto summary::after {
+    content: ""; width: 8px; height: 8px; margin-right: 4px;
+    border: solid var(--text); border-width: 0 2px 2px 0;
+    transform: rotate(45deg); transition: transform .15s;
+  }
+  details.howto[open] summary::after { transform: rotate(-135deg); margin-top: 6px; }
+  details.howto ul { margin: 0; padding: 0 0 8px 18px; }
+  details.howto li { margin-bottom: 10px; }
+  .inline { width: 14px; height: 14px; vertical-align: -2px; }
+
+  @media (max-width: 420px) {
+    header { height: 52px; }
+    header { gap: 6px; padding-left: 12px; padding-right: 12px; }
+    header h1 { font-size: 15px; white-space: normal; line-height: 1.1; }
+    .picker { gap: 4px; }
+    .number input { width: 4ch; padding: 0 4px; }
+    main { margin-top: 12px; }
+    .marker { width: 14px; height: 14px; }
+    .marker svg { width: 9px; height: 9px; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="sun" viewBox="0 0 31 31">
+    <circle cx="15.5" cy="15.5" r="13.75" fill="var(--sun)" stroke="var(--sun-edge)" stroke-width="2"/>
+  </symbol>
+  <symbol id="moon" viewBox="0 0 31 31">
+    <path d="M19.5 3.5A12.6 12.6 0 1 0 27.6 20.4A10 10 0 0 1 19.5 3.5Z" fill="var(--moon)" stroke="var(--moon-edge)" stroke-width="2" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="eq" viewBox="0 0 10 10">
+    <path d="M1 3.2h8M1 6.8h8" stroke="var(--marker)" stroke-width="1.4" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="cross" viewBox="0 0 10 10">
+    <path d="M1.8 1.8l6.4 6.4M8.2 1.8l-6.4 6.4" stroke="var(--marker)" stroke-width="1.4" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<header>
+  <h1>Tango Unlimited</h1>
+  <div class="timer" aria-label="Elapsed time">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+      <circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.3 1.6"/>
+    </svg>
+    <span id="time">0:00</span>
+  </div>
+  <div class="header-right">
+    <div class="picker">
+      <button class="btn icon" id="prev" aria-label="Previous game">&#8249;</button>
+      <label class="number">No. <input id="number" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" aria-label="Game number"></label>
+      <button class="btn icon" id="next" aria-label="Next game">&#8250;</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="board-wrap">
+    <div class="board" id="board" role="grid" aria-label="Tango grid"></div>
+  </div>
+
+  <div class="actions">
+    <button class="btn" id="undo" disabled>Undo</button>
+    <button class="btn" id="clear" disabled>Clear</button>
+  </div>
+
+  <div class="message" id="message" role="alert" hidden></div>
+
+  <div class="win" id="win" hidden>
+    <h2 id="win-title">You solved it!</h2>
+    <p id="win-text"></p>
+    <button class="btn primary" id="again">Next game</button>
+  </div>
+
+  <details class="howto" open>
+    <summary>How to play</summary>
+    <ul>
+      <li>Fill the grid so that each cell contains either a
+        <svg class="inline"><use href="#sun"/></svg> or a <svg class="inline"><use href="#moon"/></svg>.
+        Tap once for <svg class="inline"><use href="#sun"/></svg>, twice for
+        <svg class="inline"><use href="#moon"/></svg>, three times to clear.</li>
+      <li>No more than 2 <svg class="inline"><use href="#sun"/></svg> or
+        <svg class="inline"><use href="#moon"/></svg> may be next to each other, either vertically or horizontally.</li>
+      <li>Each row (and column) must contain the same number of
+        <svg class="inline"><use href="#sun"/></svg> and <svg class="inline"><use href="#moon"/></svg>.</li>
+      <li>Cells separated by an <svg class="inline"><use href="#eq"/></svg> sign must be of the same type.</li>
+      <li>Cells separated by a <svg class="inline"><use href="#cross"/></svg> sign must be of the opposite type.</li>
+      <li>Each puzzle has one right answer and can be solved via deduction (you should never have to make a guess).</li>
+    </ul>
+  </details>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  const N = 6, EMPTY = -1, SUN = 0, MOON = 1;
+  const NONE = 0, EQ = 1, CROSS = 2;
+  const BEST_KEY = 'tango-unlimited-best-';
+  const LAST_KEY = 'tango-unlimited-last';
+  const MAX_GAME = 999999;
+
+  // ---------- Puzzle generation ----------
+
+  // Puzzles are built from a random stream seeded by the game number, so a given
+  // number is the same puzzle for everyone. Changing anything that consumes
+  // `random` below changes every numbered puzzle.
+  let random = Math.random;
+  function seededRandom(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  const shuffle = a => {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+
+  // Every legal way to fill one row or column: 3 of each, never 3 in a row.
+  const LINES = [];
+  for (let bits = 0; bits < 1 << N; bits++) {
+    const line = Array.from({ length: N }, (_, i) => (bits >> i) & 1);
+    if (line.reduce((s, v) => s + v, 0) !== N / 2) continue;
+    if (line.some((v, i) => i >= 2 && v === line[i - 1] && v === line[i - 2])) continue;
+    LINES.push(line);
+  }
+
+  function randomSolution() {
+    const g = new Array(N * N).fill(EMPTY);
+    const fits = (i, v) => {
+      const r = Math.floor(i / N), c = i % N;
+      if (c >= 2 && g[i - 1] === v && g[i - 2] === v) return false;
+      if (r >= 2 && g[i - N] === v && g[i - 2 * N] === v) return false;
+      let row = 0, col = 0;
+      for (let k = 0; k < c; k++) if (g[r * N + k] === v) row++;
+      for (let k = 0; k < r; k++) if (g[k * N + c] === v) col++;
+      return row < N / 2 && col < N / 2;
+    };
+    const fill = i => {
+      if (i === N * N) return true;
+      for (const v of shuffle([SUN, MOON])) {
+        if (!fits(i, v)) continue;
+        g[i] = v;
+        if (fill(i + 1)) return true;
+      }
+      g[i] = EMPTY;
+      return false;
+    };
+    fill(0);
+    return g;
+  }
+
+  // The 12 lines as cell indices, plus the marker slots between consecutive cells.
+  // right[i]: marker between cell i and i+1; down[i]: marker between cell i and i+N.
+  const LINE_CELLS = [];
+  for (let r = 0; r < N; r++) LINE_CELLS.push({ cells: Array.from({ length: N }, (_, c) => r * N + c), dir: 'right' });
+  for (let c = 0; c < N; c++) LINE_CELLS.push({ cells: Array.from({ length: N }, (_, r) => r * N + c), dir: 'down' });
+
+  // Deduction-only solver: repeatedly looks at one row or column and fills any cell
+  // that has the same value in every legal completion of that line. No guessing,
+  // so anything it solves is uniquely solvable by reasoning alone.
+  function solvesByDeduction(givens, markers) {
+    const g = givens.slice();
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const { cells, dir } of LINE_CELLS) {
+        if (cells.every(i => g[i] !== EMPTY)) continue;
+        const options = LINES.filter(line => {
+          for (let k = 0; k < N; k++) {
+            if (g[cells[k]] !== EMPTY && g[cells[k]] !== line[k]) return false;
+            if (k < N - 1) {
+              const m = markers[dir][cells[k]];
+              if (m === EQ && line[k] !== line[k + 1]) return false;
+              if (m === CROSS && line[k] === line[k + 1]) return false;
+            }
+          }
+          return true;
+        });
+        if (!options.length) return false;
+        for (let k = 0; k < N; k++) {
+          if (g[cells[k]] !== EMPTY) continue;
+          const v = options[0][k];
+          if (options.every(o => o[k] === v)) { g[cells[k]] = v; changed = true; }
+        }
+      }
+    }
+    return g.every(v => v !== EMPTY);
+  }
+
+  function generatePuzzle(number) {
+    random = seededRandom(number);
+    const solution = randomSolution();
+    const markers = { right: new Array(N * N).fill(NONE), down: new Array(N * N).fill(NONE) };
+
+    const edges = [];
+    for (let i = 0; i < N * N; i++) {
+      if (i % N < N - 1) edges.push(['right', i, i + 1]);
+      if (i < N * (N - 1)) edges.push(['down', i, i + N]);
+    }
+    const chosen = shuffle(edges).slice(0, 8 + Math.floor(random() * 5));
+    for (const [dir, a, b] of chosen) markers[dir][a] = solution[a] === solution[b] ? EQ : CROSS;
+
+    // Start fully revealed, then strip clues for as long as it stays solvable.
+    const givens = solution.slice();
+    for (const i of shuffle([...givens.keys()])) {
+      givens[i] = EMPTY;
+      if (!solvesByDeduction(givens, markers)) givens[i] = solution[i];
+    }
+    for (const [dir, a] of shuffle(chosen)) {
+      const kept = markers[dir][a];
+      markers[dir][a] = NONE;
+      if (!solvesByDeduction(givens, markers)) markers[dir][a] = kept;
+    }
+    return { givens, markers };
+  }
+
+  // ---------- Rule checking ----------
+
+  function findErrors(g, markers) {
+    const bad = new Set();
+    const messages = new Set();
+    for (const { cells, dir } of LINE_CELLS) {
+      const count = [0, 0];
+      for (let k = 0; k < N; k++) {
+        const v = g[cells[k]];
+        if (v === EMPTY) continue;
+        count[v]++;
+        if (k >= 2 && g[cells[k - 1]] === v && g[cells[k - 2]] === v) {
+          bad.add(cells[k]).add(cells[k - 1]).add(cells[k - 2]);
+          messages.add('three');
+        }
+      }
+      if (count[SUN] > N / 2 || count[MOON] > N / 2) {
+        cells.forEach(i => bad.add(i));
+        messages.add('balance');
+      }
+      for (let k = 0; k < N - 1; k++) {
+        const a = cells[k], b = cells[k + 1], m = markers[dir][a];
+        if (m === NONE || g[a] === EMPTY || g[b] === EMPTY) continue;
+        if (m === EQ && g[a] !== g[b]) { bad.add(a).add(b); messages.add('eq'); }
+        if (m === CROSS && g[a] === g[b]) { bad.add(a).add(b); messages.add('cross'); }
+      }
+    }
+    return { bad, messages };
+  }
+
+  // ---------- Game state & UI ----------
+
+  const $ = id => document.getElementById(id);
+  const boardEl = $('board'), timeEl = $('time'), messageEl = $('message');
+  const undoBtn = $('undo'), clearBtn = $('clear'), winEl = $('win');
+  const icon = (id, cls) => `<svg class="${cls}" aria-hidden="true"><use href="#${id}"/></svg>`;
+  const SUN_I = icon('sun', 'inline'), MOON_I = icon('moon', 'inline');
+  const MESSAGES = {
+    three: `Oops! Only 2 ${SUN_I} or ${MOON_I} can touch, either vertically or horizontally.`,
+    balance: `Oops! Each row and column must have the same number of ${SUN_I} and ${MOON_I}.`,
+    eq: `Oops! Cells separated by ${icon('eq', 'inline')} must be the same.`,
+    cross: `Oops! Cells separated by ${icon('cross', 'inline')} must be opposite.`,
+  };
+  const NAMES = ['Sun', 'Moon'];
+
+  const numberEl = $('number');
+  let gameNumber, puzzle, grid, history, solved, errorTimer;
+  let cells = [];
+
+  // Timer counts only while the page is visible and the puzzle is unsolved.
+  let elapsed = 0, startedAt = null, ticker = null;
+  const now = () => performance.now();
+  const totalMs = () => elapsed + (startedAt === null ? 0 : now() - startedAt);
+  const fmt = ms => {
+    const s = Math.floor(ms / 1000);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  };
+  const paintTime = () => { timeEl.textContent = fmt(totalMs()); };
+  function startTimer() {
+    if (startedAt !== null || solved) return;
+    startedAt = now();
+    ticker = setInterval(paintTime, 250);
+  }
+  function stopTimer() {
+    if (startedAt === null) return;
+    elapsed += now() - startedAt;
+    startedAt = null;
+    clearInterval(ticker);
+  }
+  document.addEventListener('visibilitychange', () => document.hidden ? stopTimer() : startTimer());
+
+  function load(key) {
+    try { return Number(localStorage.getItem(key)) || null; } catch { return null; }
+  }
+  function save(key, value) {
+    try { localStorage.setItem(key, String(value)); } catch { /* storage unavailable */ }
+  }
+
+  const validNumber = n => Number.isInteger(n) && n >= 1 && n <= MAX_GAME;
+
+  function startGame(number) {
+    gameNumber = number;
+    numberEl.value = number;
+    $('prev').disabled = number <= 1;
+    $('next').disabled = number >= MAX_GAME;
+    document.title = `Tango Unlimited No. ${number}`;
+    // Keep the number in the address bar so a copied link opens the same puzzle.
+    const url = new URL(location.href);
+    url.searchParams.set('game', number);
+    window.history.replaceState(null, '', url);
+    save(LAST_KEY, number);
+
+    puzzle = generatePuzzle(number);
+    grid = puzzle.givens.slice();
+    history = [];
+    solved = false;
+    clearTimeout(errorTimer);
+
+    boardEl.innerHTML = '';
+    boardEl.classList.remove('solved');
+    cells = grid.map((_, i) => {
+      const el = document.createElement('button');
+      el.className = 'cell';
+      el.dataset.i = i;
+      el.setAttribute('role', 'gridcell');
+      if (puzzle.givens[i] !== EMPTY) { el.classList.add('given'); el.setAttribute('aria-disabled', 'true'); }
+      boardEl.appendChild(el);
+      return el;
+    });
+    cells.forEach((_, i) => paintCell(i));
+    showErrors(new Set(), new Set());
+    winEl.hidden = true;
+    updateButtons();
+
+    stopTimer();
+    elapsed = 0;
+    paintTime();
+    if (!document.hidden) startTimer();
+  }
+
+  function paintCell(i) {
+    const el = cells[i], v = grid[i];
+    let html = v === EMPTY ? '' : icon(v === SUN ? 'sun' : 'moon', 'piece');
+    const r = puzzle.markers.right[i], d = puzzle.markers.down[i];
+    if (r) html += `<span class="marker right">${icon(r === EQ ? 'eq' : 'cross', '')}</span>`;
+    if (d) html += `<span class="marker bottom">${icon(d === EQ ? 'eq' : 'cross', '')}</span>`;
+    el.innerHTML = html;
+    const pos = `Row ${Math.floor(i / N) + 1}, Column ${i % N + 1}`;
+    el.setAttribute('aria-label', `${pos}: ${v === EMPTY ? 'empty' : NAMES[v]}${puzzle.givens[i] !== EMPTY ? ' (locked)' : ''}`);
+  }
+
+  function showErrors(bad, messages) {
+    cells.forEach((el, i) => el.classList.toggle('error', bad.has(i)));
+    messageEl.hidden = messages.size === 0;
+    messageEl.innerHTML = [...messages].map(m => `<div>${MESSAGES[m]}</div>`).join('');
+  }
+
+  function updateButtons() {
+    undoBtn.disabled = solved || history.length === 0;
+    clearBtn.disabled = solved || grid.every((v, i) => v === puzzle.givens[i]);
+  }
+
+  function afterChange() {
+    updateButtons();
+    clearTimeout(errorTimer);
+    const { bad, messages } = findErrors(grid, puzzle.markers);
+    if (bad.size === 0) {
+      showErrors(bad, messages);
+      if (grid.every(v => v !== EMPTY)) win();
+      return;
+    }
+    // Clear errors that were just fixed right away; give new ones a moment,
+    // since cycling to Moon passes through Sun.
+    cells.forEach((el, i) => { if (!bad.has(i)) el.classList.remove('error'); });
+    errorTimer = setTimeout(() => showErrors(bad, messages), 700);
+  }
+
+  function win() {
+    solved = true;
+    stopTimer();
+    const ms = totalMs();
+    paintTime();
+    const best = load(BEST_KEY + gameNumber);
+    if (best === null || ms < best) save(BEST_KEY + gameNumber, ms);
+    $('win-title').textContent = `You solved No. ${gameNumber}!`;
+    $('win-text').textContent = best === null
+      ? `Solved in ${fmt(ms)}.`
+      : ms < best
+        ? `Solved in ${fmt(ms)}, beating your previous ${fmt(best)}.`
+        : `Solved in ${fmt(ms)}. Your best on this puzzle: ${fmt(best)}.`;
+    boardEl.classList.add('solved');
+    winEl.hidden = false;
+    updateButtons();
+  }
+
+  boardEl.addEventListener('click', e => {
+    const el = e.target.closest('.cell');
+    if (!el || solved) return;
+    const i = Number(el.dataset.i);
+    if (puzzle.givens[i] !== EMPTY) return;
+    history.push([[i, grid[i]]]);
+    grid[i] = grid[i] === EMPTY ? SUN : grid[i] === SUN ? MOON : EMPTY;
+    paintCell(i);
+    afterChange();
+  });
+
+  undoBtn.addEventListener('click', () => {
+    const step = history.pop();
+    if (!step) return;
+    for (const [i, v] of step) { grid[i] = v; paintCell(i); }
+    afterChange();
+  });
+
+  clearBtn.addEventListener('click', () => {
+    const step = [];
+    grid.forEach((v, i) => {
+      if (v !== puzzle.givens[i]) { step.push([i, v]); grid[i] = EMPTY; paintCell(i); }
+    });
+    if (step.length) history.push(step);
+    afterChange();
+  });
+
+  const step = d => { if (validNumber(gameNumber + d)) startGame(gameNumber + d); };
+  $('prev').addEventListener('click', () => step(-1));
+  $('next').addEventListener('click', () => step(1));
+  $('again').addEventListener('click', () => step(1));
+  numberEl.addEventListener('change', () => {
+    const n = Number(numberEl.value.trim());
+    if (validNumber(n) && n !== gameNumber) startGame(n);
+    else numberEl.value = gameNumber;
+  });
+  numberEl.addEventListener('keydown', e => { if (e.key === 'Enter') numberEl.blur(); });
+  numberEl.addEventListener('focus', () => numberEl.select());
+
+  const fromUrl = Number(new URLSearchParams(location.search).get('game'));
+  startGame(validNumber(fromUrl) ? fromUrl : load(LAST_KEY) || 1);
+})();
+</script>
+</body>
+</html>
