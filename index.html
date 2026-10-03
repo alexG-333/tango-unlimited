@@ -110,6 +110,14 @@
   .marker.right { right: -1px; top: 50%; transform: translate(50%, -50%); }
   .marker.bottom { bottom: -1px; left: 50%; transform: translate(-50%, 50%); }
 
+  .veil {
+    position: absolute; inset: 0; z-index: 5;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(248, 250, 253, .6);
+    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+    border-radius: 4px;
+  }
+  .veil .btn { height: 48px; padding: 0 32px; border-radius: 24px; font-size: 18px; box-shadow: 0 2px 8px rgba(0, 0, 0, .2); }
   .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
   .message {
     margin-top: 12px; padding: 12px 16px;
@@ -195,6 +203,7 @@
 <main>
   <div class="board-wrap">
     <div class="board" id="board" role="grid" aria-label="Tango grid"></div>
+    <div class="veil" id="veil"><button class="btn primary" id="start">Start game</button></div>
   </div>
 
   <div class="actions">
@@ -408,10 +417,11 @@
   const NAMES = ['Sun', 'Moon'];
 
   const numberEl = $('number');
-  let gameNumber, puzzle, grid, history, solved, errorTimer;
+  const veilEl = $('veil');
+  let gameNumber, puzzle, grid, history, started, solved, errorTimer;
   let cells = [];
 
-  // Timer counts only while the page is visible and the puzzle is unsolved.
+  // Timer counts only while the page is visible and the puzzle is started and unsolved.
   let elapsed = 0, startedAt = null, ticker = null;
   const now = () => performance.now();
   const totalMs = () => elapsed + (startedAt === null ? 0 : now() - startedAt);
@@ -421,7 +431,7 @@
   };
   const paintTime = () => { timeEl.textContent = fmt(totalMs()); };
   function startTimer() {
-    if (startedAt !== null || solved) return;
+    if (startedAt !== null || solved || !started) return;
     startedAt = now();
     ticker = setInterval(paintTime, 250);
   }
@@ -457,6 +467,7 @@
     puzzle = generatePuzzle(number);
     grid = puzzle.givens.slice();
     history = [];
+    started = false;
     solved = false;
     clearTimeout(errorTimer);
 
@@ -467,28 +478,41 @@
       el.className = 'cell';
       el.dataset.i = i;
       el.setAttribute('role', 'gridcell');
-      if (puzzle.givens[i] !== EMPTY) { el.classList.add('given'); el.setAttribute('aria-disabled', 'true'); }
       boardEl.appendChild(el);
       return el;
     });
     cells.forEach((_, i) => paintCell(i));
     showErrors(new Set(), new Set());
     winEl.hidden = true;
+    veilEl.hidden = false;
     updateButtons();
 
     stopTimer();
     elapsed = 0;
     paintTime();
+  }
+
+  // The puzzle stays undrawn behind the veil until the player presses Start.
+  function begin() {
+    started = true;
+    veilEl.hidden = true;
+    cells.forEach((_, i) => paintCell(i));
+    updateButtons();
     if (!document.hidden) startTimer();
   }
 
   function paintCell(i) {
     const el = cells[i], v = grid[i];
+    if (!started) { el.innerHTML = ''; el.tabIndex = -1; return; }
+    el.tabIndex = 0;
     let html = v === EMPTY ? '' : icon(v === SUN ? 'sun' : 'moon', 'piece');
     const r = puzzle.markers.right[i], d = puzzle.markers.down[i];
     if (r) html += `<span class="marker right">${icon(r === EQ ? 'eq' : 'cross', '')}</span>`;
     if (d) html += `<span class="marker bottom">${icon(d === EQ ? 'eq' : 'cross', '')}</span>`;
     el.innerHTML = html;
+    const given = puzzle.givens[i] !== EMPTY;
+    el.classList.toggle('given', given);
+    if (given) el.setAttribute('aria-disabled', 'true');
     const pos = `Row ${Math.floor(i / N) + 1}, Column ${i % N + 1}`;
     el.setAttribute('aria-label', `${pos}: ${v === EMPTY ? 'empty' : NAMES[v]}${puzzle.givens[i] !== EMPTY ? ' (locked)' : ''}`);
   }
@@ -500,8 +524,8 @@
   }
 
   function updateButtons() {
-    undoBtn.disabled = solved || history.length === 0;
-    clearBtn.disabled = solved || grid.every((v, i) => v === puzzle.givens[i]);
+    undoBtn.disabled = !started || solved || history.length === 0;
+    clearBtn.disabled = !started || solved || grid.every((v, i) => v === puzzle.givens[i]);
   }
 
   function afterChange() {
@@ -539,7 +563,7 @@
 
   boardEl.addEventListener('click', e => {
     const el = e.target.closest('.cell');
-    if (!el || solved) return;
+    if (!el || solved || !started) return;
     const i = Number(el.dataset.i);
     if (puzzle.givens[i] !== EMPTY) return;
     history.push([[i, grid[i]]]);
@@ -564,6 +588,7 @@
     afterChange();
   });
 
+  $('start').addEventListener('click', begin);
   const step = d => { if (validNumber(gameNumber + d)) startGame(gameNumber + d); };
   $('prev').addEventListener('click', () => step(-1));
   $('next').addEventListener('click', () => step(1));
